@@ -255,6 +255,14 @@ void mainWrapped(int argc, char * * argv)
     initNix();
     initGC();
 
+    #if __linux__
+    if (getuid() == 0) {
+        saveMountNamespace();
+        if (unshare(CLONE_NEWNS) == -1)
+            throw SysError("setting up a private mount namespace");
+    }
+    #endif
+
     programPath = argv[0];
     auto programName = std::string(baseNameOf(programPath));
 
@@ -337,7 +345,7 @@ void mainWrapped(int argc, char * * argv)
     if (args.command->first != "repl"
         && args.command->first != "doctor"
         && args.command->first != "upgrade-nix")
-        settings.requireExperimentalFeature("nix-command");
+        settings.requireExperimentalFeature(Xp::NixCommand);
 
     if (args.useNet && !haveInternet()) {
         warn("you don't have Internet access; disabling some network-dependent features");

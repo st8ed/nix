@@ -1179,7 +1179,8 @@ struct RestrictedStore : public virtual RestrictedStoreConfig, public virtual Lo
 
     StorePath addToStore(const string & name, const Path & srcPath,
         FileIngestionMethod method = FileIngestionMethod::Recursive, HashType hashAlgo = htSHA256,
-        PathFilter & filter = defaultPathFilter, RepairFlag repair = NoRepair) override
+        PathFilter & filter = defaultPathFilter, RepairFlag repair = NoRepair,
+        const StorePathSet & references = StorePathSet()) override
     { throw Error("addToStore"); }
 
     void addToStore(const ValidPathInfo & info, Source & narSource,
@@ -1198,9 +1199,10 @@ struct RestrictedStore : public virtual RestrictedStoreConfig, public virtual Lo
     }
 
     StorePath addToStoreFromDump(Source & dump, const string & name,
-        FileIngestionMethod method = FileIngestionMethod::Recursive, HashType hashAlgo = htSHA256, RepairFlag repair = NoRepair) override
+        FileIngestionMethod method = FileIngestionMethod::Recursive, HashType hashAlgo = htSHA256, RepairFlag repair = NoRepair,
+        const StorePathSet & references = StorePathSet()) override
     {
-        auto path = next->addToStoreFromDump(dump, name, method, hashAlgo, repair);
+        auto path = next->addToStoreFromDump(dump, name, method, hashAlgo, repair, references);
         goal.addDependency(path);
         return path;
     }
@@ -1259,7 +1261,7 @@ struct RestrictedStore : public virtual RestrictedStoreConfig, public virtual Lo
             for (auto & [outputName, outputPath] : outputs)
                 if (wantOutput(outputName, bfd.outputs)) {
                     newPaths.insert(outputPath);
-                    if (settings.isExperimentalFeatureEnabled("ca-derivations")) {
+                    if (settings.isExperimentalFeatureEnabled(Xp::CaDerivations)) {
                         auto thisRealisation = next->queryRealisation(
                             DrvOutput{drvHashes.at(outputName), outputName}
                         );
@@ -1320,7 +1322,7 @@ struct RestrictedStore : public virtual RestrictedStoreConfig, public virtual Lo
 
 void LocalDerivationGoal::startDaemon()
 {
-    settings.requireExperimentalFeature("recursive-nix");
+    settings.requireExperimentalFeature(Xp::RecursiveNix);
 
     Store::Params params;
     params["path-info-cache-size"] = "0";
@@ -1353,7 +1355,7 @@ void LocalDerivationGoal::startDaemon()
             AutoCloseFD remote = accept(daemonSocket.get(),
                 (struct sockaddr *) &remoteAddr, &remoteAddrLen);
             if (!remote) {
-                if (errno == EINTR) continue;
+                if (errno == EINTR || errno == EAGAIN) continue;
                 if (errno == EINVAL) break;
                 throw SysError("accepting connection");
             }
@@ -1991,7 +1993,7 @@ void LocalDerivationGoal::runChild()
                 else if (drv->builder == "builtin:unpack-channel")
                     builtinUnpackChannel(drv2);
                 else
-                    throw Error("unsupported builtin function '%1%'", string(drv->builder, 8));
+                    throw Error("unsupported builtin builder '%1%'", string(drv->builder, 8));
                 _exit(0);
             } catch (std::exception & e) {
                 writeFull(STDERR_FILENO, e.what() + std::string("\n"));
@@ -2561,7 +2563,7 @@ void LocalDerivationGoal::registerOutputs()
        that for floating CA derivations, which otherwise couldn't be cached,
        but it's fine to do in all cases. */
 
-    if (settings.isExperimentalFeatureEnabled("ca-derivations")) {
+    if (settings.isExperimentalFeatureEnabled(Xp::CaDerivations)) {
         for (auto& [outputName, newInfo] : infos) {
             auto thisRealisation = Realisation{
                 .id = DrvOutput{initialOutputs.at(outputName).outputHash,

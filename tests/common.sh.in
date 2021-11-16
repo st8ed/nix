@@ -36,8 +36,9 @@ export PATH=@bindir@:$PATH
 if [[ -n "${NIX_CLIENT_PACKAGE:-}" ]]; then
   export PATH="$NIX_CLIENT_PACKAGE/bin":$PATH
 fi
+DAEMON_PATH="$PATH"
 if [[ -n "${NIX_DAEMON_PACKAGE:-}" ]]; then
-  export NIX_DAEMON_COMMAND="$NIX_DAEMON_PACKAGE/bin/nix-daemon"
+  DAEMON_PATH="${NIX_DAEMON_PACKAGE}:$DAEMON_PATH"
 fi
 coreutils=@coreutils@
 
@@ -65,7 +66,7 @@ clearProfiles() {
 
 clearStore() {
     echo "clearing store..."
-    chmod -R +w "$NIX_STORE_DIR"
+    chmod -R +w "$NIX_STORE_DIR" || true
     rm -rf "$NIX_STORE_DIR"
     mkdir "$NIX_STORE_DIR"
     rm -rf "$NIX_STATE_DIR"
@@ -98,7 +99,7 @@ startDaemon() {
     # Start the daemon, wait for the socket to appear.  !!!
     # ‘nix-daemon’ should have an option to fork into the background.
     rm -f $NIX_DAEMON_SOCKET_PATH
-    ${NIX_DAEMON_COMMAND:-nix daemon} &
+    PATH=$DAEMON_PATH nix daemon &
     for ((i = 0; i < 30; i++)); do
         if [[ -S $NIX_DAEMON_SOCKET_PATH ]]; then break; fi
         sleep 1

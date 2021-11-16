@@ -61,6 +61,7 @@
 
         configureFlags =
           lib.optionals stdenv.isLinux [
+            "--with-boost=${boost}/lib"
             "--with-sandbox-shell=${sh}/bin/busybox"
             "LDFLAGS=-fuse-ld=gold"
           ];
@@ -506,12 +507,7 @@
             '';
         */
 
-      };
-
-      checks = forAllSystems (system: {
-        binaryTarball = self.hydraJobs.binaryTarball.${system};
-        perlBindings = self.hydraJobs.perlBindings.${system};
-        installTests =
+        installTests = forAllSystems (system:
           let pkgs = nixpkgsFor.${system}; in
           pkgs.runCommand "install-tests" {
             againstSelf = testNixVersions pkgs pkgs.nix pkgs.pkgs.nix;
@@ -523,7 +519,14 @@
             # Disabled because the latest stable version doesn't handle
             # `NIX_DAEMON_SOCKET_PATH` which is required for the tests to work
             # againstLatestStable = testNixVersions pkgs pkgs.nix pkgs.nixStable;
-          } "touch $out";
+          } "touch $out");
+
+      };
+
+      checks = forAllSystems (system: {
+        binaryTarball = self.hydraJobs.binaryTarball.${system};
+        perlBindings = self.hydraJobs.perlBindings.${system};
+        installTests = self.hydraJobs.installTests.${system};
       });
 
       packages = forAllSystems (system: {

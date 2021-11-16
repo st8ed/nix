@@ -232,7 +232,6 @@ protected:
 
     struct State
     {
-        // FIXME: fix key
         LRUCache<std::string, PathInfoCacheValue> pathInfoCache;
     };
 
@@ -453,7 +452,7 @@ public:
        libutil/archive.hh). */
     virtual StorePath addToStore(const string & name, const Path & srcPath,
         FileIngestionMethod method = FileIngestionMethod::Recursive, HashType hashAlgo = htSHA256,
-        PathFilter & filter = defaultPathFilter, RepairFlag repair = NoRepair);
+        PathFilter & filter = defaultPathFilter, RepairFlag repair = NoRepair, const StorePathSet & references = StorePathSet());
 
     /* Copy the contents of a path to the store and register the
        validity the resulting path, using a constant amount of
@@ -469,7 +468,8 @@ public:
        `dump` may be drained */
     // FIXME: remove?
     virtual StorePath addToStoreFromDump(Source & dump, const string & name,
-        FileIngestionMethod method = FileIngestionMethod::Recursive, HashType hashAlgo = htSHA256, RepairFlag repair = NoRepair)
+        FileIngestionMethod method = FileIngestionMethod::Recursive, HashType hashAlgo = htSHA256, RepairFlag repair = NoRepair,
+        const StorePathSet & references = StorePathSet())
     { unsupported("addToStoreFromDump"); }
 
     /* Like addToStore, but the contents written to the output path is
@@ -560,26 +560,6 @@ public:
        `path' has disappeared. */
     virtual void addIndirectRoot(const Path & path)
     { unsupported("addIndirectRoot"); }
-
-    /* Acquire the global GC lock, then immediately release it.  This
-       function must be called after registering a new permanent root,
-       but before exiting.  Otherwise, it is possible that a running
-       garbage collector doesn't see the new root and deletes the
-       stuff we've just built.  By acquiring the lock briefly, we
-       ensure that either:
-
-       - The collector is already running, and so we block until the
-         collector is finished.  The collector will know about our
-         *temporary* locks, which should include whatever it is we
-         want to register as a permanent lock.
-
-       - The collector isn't running, or it's just started but hasn't
-         acquired the GC lock yet.  In that case we get and release
-         the lock right away, then exit.  The collector scans the
-         permanent root and sees ours.
-
-       In either case the permanent root is seen by the collector. */
-    virtual void syncWithGC() { };
 
     /* Find the roots of the garbage collector.  Each root is a pair
        (link, storepath) where `link' is the path of the symlink
@@ -742,6 +722,11 @@ public:
         return toRealPath(printStorePath(storePath));
     }
 
+    /*
+     * Synchronises the options of the client with those of the daemon
+     * (a no-op when there’s no daemon)
+     */
+    virtual void setOptions() { }
 protected:
 
     Stats stats;
