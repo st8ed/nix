@@ -118,11 +118,36 @@
           ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
           ++ lib.optional stdenv.hostPlatform.isx86_64 libcpuid;
 
-        awsDeps = lib.optional (stdenv.isLinux || stdenv.isDarwin)
-          (aws-sdk-cpp.override {
-            apis = ["s3" "transfer"];
-            customMemoryManagement = false;
-          });
+        awsDeps =
+          let
+            scope = lib.makeScope pkgs.newScope (self: ({
+              aws-sdk-cpp = self.callPackage aws-sdk-cpp.override {
+                customMemoryManagement = false;
+              };
+            }
+
+            // (lib.mapAttrs
+              (n: pkg: (self.callPackage pkg.override { }).overrideAttrs (old: {
+                cmakeFlags = old.cmakeFlags
+                  ++ [ "-DBYO_CRYPTO=ON" ];
+              }))
+              {
+                inherit
+                  aws-crt-cpp
+                  aws-c-auth
+                  aws-c-cal
+                  aws-c-common
+                  aws-c-compression
+                  aws-c-event-stream
+                  aws-c-http
+                  aws-c-io
+                  aws-c-mqtt
+                  aws-c-s3;
+              })));
+          in with scope;
+            lib.optional (stdenv.isLinux || stdenv.isDarwin) (aws-sdk-cpp.override {
+              apis = [ "s3" "transfer" ];
+            });
 
         propagatedDeps =
           [ ((boehmgc.override {
